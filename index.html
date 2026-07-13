@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260713-2" />
+  <link rel="stylesheet" href="styles.css?v=20260713-10" />
 </head>
 <body>
   <div class="app-shell">
@@ -155,12 +155,24 @@
           </div>
           <div class="compare-box">
             <div><span>你的答案</span><p id="yourAnswer">尚未提交</p></div>
-            <div class="original"><span>原句</span><p id="originalSentence">It’s not as easy as it looks.</p><button class="mini-sound" data-speak="It's not as easy as it looks.">🔊 再听一次</button></div>
+            <div class="original"><span>原句</span><p id="originalSentence">It’s not as easy as it looks.</p><p class="sentence-translation" id="sentenceTranslation">完成听写后，这里会显示整句中文翻译。</p><button class="mini-sound" data-speak="It's not as easy as it looks.">🔊 再听一次</button></div>
+          </div>
+          <div class="sentence-analysis" id="sentenceAnalysis">
+            <div class="sentence-analysis-head"><div><span class="tag">自动初标</span><h3>先看句子骨架，再查词</h3></div><small>点击单词或直接划词，查看朗文释义</small></div>
+            <div class="analysis-legend"><span class="subject-key">主语</span><span class="predicate-key">谓语</span><span class="object-key">宾语 / 补语</span><span class="function-key">功能词</span></div>
+            <div class="sentence-analysis-line" id="sentenceAnalysisLine" aria-label="句子主干和功能词标记"></div>
+            <div class="sentence-skeleton" id="sentenceSkeleton"></div>
+          </div>
+          <div class="word-lookup" id="wordLookup" hidden>
+            <div class="word-lookup-head"><div><span class="tag warm">朗文查词</span><strong id="lookupWord">请选择一个词</strong><small id="lookupMeta">英文释义来自 Longman Dictionary of Contemporary English</small></div><a id="lookupExternal" href="#" target="_blank" rel="noopener noreferrer">打开朗文 ↗</a></div>
+            <div class="lookup-result" id="lookupResult">划选句子中的单词后，这里会显示 Longman 英文释义。</div>
+            <label class="lookup-translation" for="lookupTranslation">我的中文理解（确认后再加入生词本）<input id="lookupTranslation" type="text" placeholder="输入你认可的中文意思"></label>
+            <div class="lookup-actions"><button class="button ghost" id="addLookupWord" type="button" disabled>＋ 加入生词本</button><span id="lookupSaved" hidden>✓ 已加入生词本</span></div>
           </div>
           <div class="knowledge-grid">
-            <article><span class="tag">句型</span><h3>not as + adj. + as</h3><p>表示“没有……那么……”。第一处 as 后接形容词原级。</p><button class="save-chip">＋ 收藏句型</button></article>
-            <article><span class="tag warm">连读</span><h3>as‿it /æzɪt/</h3><p>as 的尾音 /z/ 与 it 的元音自然连在一起，听起来像一个词。</p><button class="save-chip">＋ 加入生词本</button></article>
-            <article><span class="tag green">语用</span><h3>as it looks</h3><p>“像看起来那样”。常用于提醒一件事比表面上更难或更复杂。</p><button class="save-chip">＋ 收藏表达</button></article>
+            <article><span class="tag">句子主干</span><h3 id="structureHeading">等待自动分析</h3><p id="structureCopy">系统会把当前句子的主语、谓语和补充信息写清楚。</p><button class="knowledge-action" id="copyStructure" type="button">复制主干笔记</button></article>
+            <article><span class="tag warm">容易漏听</span><h3 id="listeningHeading">功能词与弱读</h3><p id="listeningCopy">这里列出当前句真正容易漏掉的词，并给你一个重听动作。</p><button class="knowledge-action" id="slowListenSentence" type="button">0.75× 重听当前句</button></article>
+            <article><span class="tag green">这句话怎么用</span><h3 id="usageHeading">等待使用场景</h3><p id="usageCopy">这里会说明当前句的真实用途，不再显示泛泛的语境提示。</p><small class="usage-example" id="usageExample"></small><button class="knowledge-action" id="copyUsage" type="button">复制可复用表达</button></article>
           </div>
           <div class="panel-actions"><span></span><button class="button primary next-step" data-next="3">完成解析 <span>→</span></button></div>
         </div>
@@ -168,17 +180,11 @@
         <div class="step-panel" data-panel="3">
           <div class="review-sentence">
             <p id="reviewSentenceText">It’s not as easy as it looks.</p>
-            <div class="sentence-parts"><span>It’s not</span><span>as easy as</span><span>it looks</span></div>
           </div>
           <div class="audio-player review-player">
             <button class="play-main" data-speak="It's not as easy as it looks." aria-label="播放原句"><span>▶</span></button>
             <div class="audio-body"><div class="waveform compact" aria-hidden="true"></div><div class="audio-meta"><span>重听整句</span><span>00:08</span></div></div>
             <select id="reviewSpeed" aria-label="播放速度"><option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.15">1.15×</option></select>
-          </div>
-          <div class="review-checklist">
-            <label><input type="checkbox"> 我能听清 as‿it 的连读</label>
-            <label><input type="checkbox"> 我理解 not as...as 的结构</label>
-            <label><input type="checkbox"> 我能不看文本听懂整句</label>
           </div>
           <div class="panel-actions"><button class="button ghost" id="hideSentence">隐藏文本挑战</button><button class="button primary next-step" data-next="4">开始跟读 <span>→</span></button></div>
         </div>
@@ -235,6 +241,6 @@
       <button class="button primary" id="closeCompletion">收下今日进步</button>
     </div>
   </div>
-  <script src="app.js?v=20260713-3"></script>
+  <script src="app.js?v=20260713-10"></script>
 </body>
 </html>

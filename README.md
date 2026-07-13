@@ -27,6 +27,9 @@ The prototype supports legally obtained BBC Learning English, TED, TED-Ed, and o
 - Audio is automatically split after selection using local pause detection.
 - Pasted transcripts are split by punctuation and aligned to nearby pauses.
 - Learners can select any generated sentence and fine-tune its start/end time.
+- Step 2 automatically marks a likely subject, predicate, object/complement, and easy-to-miss function words.
+- The current sentence gets a Chinese machine-translation aid; results are cached locally and should be checked against the sentence structure.
+- Selecting a word or phrase opens a Longman lookup panel; learners can review the English definition, write their own Chinese understanding, and choose whether to save it to the local vocabulary book.
 - Imported files are limited to 800 MB, with a performance warning above 200 MB. MP4 is supported when it contains a browser-decodable audio track; AAC audio is recommended. MP3 and WAV remain the most compatible formats.
 - The repository does not redistribute BBC or TED audio, videos, or complete transcripts.
 
@@ -49,3 +52,4 @@ Then open `http://127.0.0.1:8765`. The local server disables browser caching so 
 - MediaRecorder API
 - Local browser audio playback
 - Web Audio API pause detection and transcript alignment
+- Optional local Longman lookup proxy in `server.py`

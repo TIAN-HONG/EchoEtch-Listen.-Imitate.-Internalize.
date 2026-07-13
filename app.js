@@ -26,6 +26,9 @@ let pendingMediaFile = null;
 let ffmpegInstance = null;
 let isOptimizingMedia = false;
 let optimizationCancelled = false;
+let currentLookupWord = '';
+let currentLookupDefinition = '';
+let translationRequestId = 0;
 
 const MAX_MEDIA_BYTES = 800 * 1024 * 1024;
 const LARGE_MEDIA_BYTES = 200 * 1024 * 1024;
@@ -33,6 +36,15 @@ const OPTIMIZE_MEDIA_BYTES = 100 * 1024 * 1024;
 const FFMPEG_PACKAGE_URL = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
 const FFMPEG_UTIL_URL = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd';
 const FFMPEG_CORE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+const FUNCTION_WORDS = new Set('a an the this that these those i you he she it we they me him her us them my your his its our their mine yours hers ours theirs am is are was were be been being do does did have has had will would shall should can could may might must and but or nor so yet if because although though while when where who whom whose which what as than of to in on at by for from with about into over after before between through during without under again further then once here there all any both each few more most other some such no not only own same too very just'.split(' '));
+const FUNCTION_CONTRACTIONS = new Set("i'm you're he's she's it's we're they're i've you've we've they've i'll you'll he'll she'll we'll they'll i'd you'd he'd she'd we'd they'd i'm you're isn't aren't wasn't weren't don't doesn't didn't can't couldn't won't wouldn't that's what's there's we're they've".split(' '));
+const AUXILIARY_WORDS = new Set('am is are was were be been being do does did have has had will would shall should can could may might must'.split(' '));
+const SUBJECT_PRONOUNS = new Set('i you he she it we they there who what'.split(' '));
+const COMMON_VERBS = new Set('worry want talk think know feel look looks seem seems need needs come comes create creates build builds proceed proceeds evolve evolves risk risks call calls hold holds multiply multiplies use uses help helps put puts get gets make makes say says tell tells go goes grow grows become becomes mean means matter matters work works give gives take takes keep keeps try tries ask asks believe believes happen happens happen happening'.split(' '));
+
+function isFunctionWord(word) {
+  return FUNCTION_WORDS.has(word) || FUNCTION_CONTRACTIONS.has(word);
+}
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -317,6 +329,231 @@ function escapeHtml(value) {
   return value.replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[char]));
 }
 
+function tokenizeSentence(text) {
+  const parts = text.match(/[A-Za-z]+(?:['’][A-Za-z]+)?|\s+|[^\sA-Za-z]+/g) || [];
+  let wordIndex = 0;
+  return parts.map(value => {
+    const isWord = /^[A-Za-z]+(?:['’][A-Za-z]+)?$/.test(value);
+    const token = { value, isWord, lower: isWord ? value.toLowerCase().replace('’', "'") : '', wordIndex: isWord ? wordIndex : -1 };
+    if (isWord) wordIndex += 1;
+    return token;
+  });
+}
+
+function analyzeSentence(text) {
+  const tokens = tokenizeSentence(text);
+  const words = tokens.filter(token => token.isWord);
+  if (!words.length) return { tokens, subject: [], predicate: [], object: [], roles: new Map(), functionWords: [] };
+  let verbIndex = words.findIndex((word, index) => index > 0 && (AUXILIARY_WORDS.has(word.lower) || COMMON_VERBS.has(word.lower) || /(?:ed|ing)$/.test(word.lower)));
+  if (verbIndex < 0 && (AUXILIARY_WORDS.has(words[0].lower) || COMMON_VERBS.has(words[0].lower))) verbIndex = 0;
+  if (verbIndex < 0) verbIndex = Math.min(1, words.length - 1);
+
+  const invertedQuestion = verbIndex === 0 && words[1] && SUBJECT_PRONOUNS.has(words[1].lower);
+  let subjectStart = 0;
+  let subjectEnd = Math.max(0, verbIndex - 1);
+  if (invertedQuestion) {
+    subjectStart = 1;
+    subjectEnd = 1;
+  } else {
+    const pronounIndex = words.slice(0, verbIndex).map(word => word.lower).reduce((found, word, index) => SUBJECT_PRONOUNS.has(word) ? index : found, -1);
+    if (pronounIndex >= 0) subjectStart = pronounIndex;
+    else {
+      const firstContent = words.slice(0, verbIndex).findIndex(word => !isFunctionWord(word.lower));
+      if (firstContent >= 0) subjectStart = firstContent;
+    }
+  }
+
+  let predicateEnd = verbIndex;
+  if (AUXILIARY_WORDS.has(words[verbIndex]?.lower)) {
+    const contentOffset = words.slice(verbIndex + 1, verbIndex + 5).findIndex(word => !isFunctionWord(word.lower));
+    if (contentOffset >= 0) predicateEnd = verbIndex + 1 + contentOffset;
+  }
+  const subjectIndices = new Set();
+  for (let index = subjectStart; index <= subjectEnd; index++) subjectIndices.add(index);
+  const predicateIndices = new Set();
+  for (let index = verbIndex; index <= predicateEnd; index++) predicateIndices.add(index);
+  if (invertedQuestion && predicateEnd < 2 && words[2]) predicateIndices.add(2);
+  const objectStart = Math.max(predicateEnd + 1, invertedQuestion ? 3 : 0);
+  const objectIndices = new Set(words.map((_, index) => index).filter(index => index >= objectStart && !subjectIndices.has(index)));
+  const roles = new Map();
+  subjectIndices.forEach(index => roles.set(index, 'subject'));
+  predicateIndices.forEach(index => roles.set(index, 'predicate'));
+  objectIndices.forEach(index => roles.set(index, 'object'));
+  return {
+    tokens,
+    subject: words.filter((_, index) => subjectIndices.has(index)),
+    predicate: words.filter((_, index) => predicateIndices.has(index)),
+    object: words.filter((_, index) => objectIndices.has(index)),
+    roles,
+    functionWords: [...new Set(words.filter(word => isFunctionWord(word.lower)).map(word => word.value))]
+  };
+}
+
+function usageForSentence(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes('i worry about')) return { heading: '表达对某事的担忧', copy: 'I worry about + 名词、动名词或 what / how 从句，用来说明你担心的对象。', example: 'I worry about how this will affect children.', pattern: 'I worry about + 名词 / what 从句' };
+  if (lower.includes('i worry that')) return { heading: '表达担忧并说明风险', copy: 'I worry that + 完整句子；不是只说“我担心”，而是把担心的后果说出来。', example: 'I worry that we may be moving too fast.', pattern: 'I worry that + 完整句子' };
+  if (/not as .+ as/.test(lower)) return { heading: '比较实际情况与表面印象', copy: '说明某件事没有看起来那么容易、简单或明显，可以替换中间的形容词。', example: "The task isn't as easy as it looks.", pattern: 'not as + 形容词 + as' };
+  if (lower.includes('what i would call')) return { heading: '给一个现象命名', copy: '先描述问题，再用 what I would call 引出你为它总结的概念或标签。', example: 'That is what I would call an adaptation gap.', pattern: 'what I would call + 名词' };
+  if (lower.includes('what would it look like')) return { heading: '把抽象观点变成具体方案', copy: '从“我们应该怎么做”过渡到可观察的行动、案例或结果。', example: 'What would it look like in practice?', pattern: 'What would it look like? It would look like...' };
+  if (lower.includes("we're not just") || lower.includes('not just')) return { heading: '递进强调更深层的问题', copy: '先承认一个明显问题，再用 not just... 强调真正更严重或更重要的部分。', example: "We're not just solving a technical problem.", pattern: 'not just A, but / we are B' };
+  if (lower.includes('there has to be')) return { heading: '强调某件事非常有必要', copy: '比 there should be 更有力度，适合提出制度、合作或行动上的必要改变。', example: 'There has to be a better way.', pattern: 'There has to be + 名词' };
+  if (lower.includes('a little less') || lower.includes('a little bit more')) return { heading: '用对称结构提出调整方向', copy: '减少一种倾向，同时增加另一种更理想的做法，常用于演讲总结。', example: 'A little less blame, a little more space.', pattern: 'a little less A, a little more B' };
+  if (lower.startsWith('i want to')) return { heading: '明确接下来要谈的重点', copy: '用于演讲或讨论中的转场，让听众知道下一部分的主题。', example: 'I want to talk about a different approach.', pattern: 'I want to talk about + 主题' };
+  if (lower.startsWith('and so') || lower.startsWith('so ')) return { heading: '承接前文并给出结论', copy: 'so / and so 表示“基于前面的理由，因此……”，用于推进论证。', example: 'And so we need to act now.', pattern: 'And so + 结论' };
+  return { heading: '当前句的具体用途', copy: '先看这句话和前后句的关系，再把它当作一个可替换的表达，而不是孤立背诵。', example: '替换主语或关键词，造一个与你生活相关的句子。', pattern: '点击原句中的词查看可替换表达' };
+}
+
+async function loadSentenceTranslation(segment) {
+  const text = String(segment.text || '').trim();
+  const requestId = ++translationRequestId;
+  const translationBox = $('#sentenceTranslation');
+  if (!text) {
+    translationBox.textContent = '暂无原句，无法生成整句翻译。';
+    return;
+  }
+  const storedTranslation = segment.study?.translation || localStorage.getItem(`echoetch-translation-${encodeURIComponent(text)}`);
+  if (storedTranslation) {
+    translationBox.textContent = storedTranslation;
+    return;
+  }
+  translationBox.textContent = '正在生成整句翻译…';
+  try {
+    const response = await fetch(`/api/translate?q=${encodeURIComponent(text)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Translation HTTP ${response.status}`);
+    const result = await response.json();
+    if (requestId !== translationRequestId) return;
+    const translation = String(result.translation || '').trim();
+    if (!translation) throw new Error('Empty translation');
+    translationBox.textContent = translation;
+    localStorage.setItem(`echoetch-translation-${encodeURIComponent(text)}`, translation);
+  } catch (error) {
+    console.error(error);
+    if (requestId === translationRequestId) translationBox.textContent = '暂时无法获取自动翻译，请先打开朗文释义，或根据句子主干自己确认中文理解。';
+  }
+}
+
+function renderSentenceAnalysis(text) {
+  const analysis = analyzeSentence(text);
+  const line = $('#sentenceAnalysisLine');
+  line.replaceChildren();
+  analysis.tokens.forEach(token => {
+    if (!token.isWord) {
+      line.append(document.createTextNode(token.value));
+      return;
+    }
+    const span = document.createElement('span');
+    const role = analysis.roles.get(token.wordIndex);
+    span.className = `analysis-token${role ? ` role-${role}` : ''}${role === 'subject' || role === 'predicate' ? ' main-word' : ''}${isFunctionWord(token.lower) ? ' function-word' : ''}`;
+    span.dataset.word = token.value;
+    span.textContent = token.value;
+    line.append(span);
+  });
+  const subject = analysis.subject.map(word => word.value).join(' ') || '承接上文 / 省略';
+  const predicate = analysis.predicate.map(word => word.value).join(' ') || '待确认';
+  const object = analysis.object.map(word => word.value).join(' ') || '无明显宾语 / 补语';
+  $('#sentenceSkeleton').innerHTML = `<span class="skeleton-part subject"><small>主语</small>${escapeHtml(subject)}</span><span class="skeleton-part predicate"><small>谓语</small>${escapeHtml(predicate)}</span><span class="skeleton-part object"><small>宾语 / 补语 / 其他信息</small>${escapeHtml(object)}</span>`;
+  $('#structureHeading').textContent = `${subject} + ${predicate}`;
+  $('#structureCopy').textContent = `自动初标：主语「${subject}」，谓语「${predicate}」；复杂句建议结合语义再次确认。`;
+  $('#listeningHeading').textContent = analysis.functionWords.length ? `容易漏听：${analysis.functionWords.join(' · ')}` : '本句功能词较少';
+  $('#listeningCopy').textContent = analysis.functionWords.length ? '虚线词通常会弱读、连读或缩短。先单独辨认，再放回整句原速重听。' : '重点关注重音位置和词尾，不需要刻意寻找功能词。';
+  const usage = usageForSentence(text);
+  $('#usageHeading').textContent = usage.heading;
+  $('#usageCopy').textContent = usage.copy;
+  $('#usageExample').textContent = `例句：${usage.example}`;
+  $('#wordLookup').hidden = true;
+  currentLookupWord = '';
+  currentLookupDefinition = '';
+}
+
+function normalizeLookupText(value) {
+  return value.replace(/[’]/g, "'").replace(/[^A-Za-z0-9' -]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70);
+}
+
+function savedVocabularyItem(word) {
+  try {
+    const vocabulary = JSON.parse(localStorage.getItem('echoetch-vocabulary') || '[]');
+    return vocabulary.find(item => item.word?.toLowerCase() === word.toLowerCase()) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function lookupLongman(rawValue) {
+  const word = normalizeLookupText(rawValue);
+  if (!word) return;
+  if (word.split(' ').length > 4) {
+    showToast('一次请选择一个单词或短语');
+    return;
+  }
+  currentLookupWord = word;
+  currentLookupDefinition = '';
+  const savedItem = savedVocabularyItem(word);
+  $('#wordLookup').hidden = false;
+  $('#lookupWord').textContent = word;
+  $('#lookupMeta').textContent = '正在查询 Longman Dictionary of Contemporary English…';
+  $('#lookupResult').textContent = '正在读取释义…';
+  $('#lookupTranslation').value = savedItem?.translation || '';
+  $('#lookupExternal').href = `https://www.ldoceonline.com/dictionary/${encodeURIComponent(word.toLowerCase())}`;
+  $('#addLookupWord').disabled = false;
+  $('#addLookupWord').textContent = savedItem ? '更新生词本' : '＋ 加入生词本';
+  $('#lookupSaved').hidden = !savedItem;
+  try {
+    const response = await fetch(`/api/longman?q=${encodeURIComponent(word)}`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Dictionary HTTP ${response.status}`);
+    const result = await response.json();
+    if (currentLookupWord !== word) return;
+    $('#lookupWord').textContent = result.word || word;
+    $('#lookupMeta').textContent = `Longman${result.part_of_speech ? ` · ${result.part_of_speech}` : ''}`;
+    $('#lookupExternal').href = result.url || $('#lookupExternal').href;
+    const definitions = (result.definitions || []).map(definition => `<li>${escapeHtml(definition)}</li>`).join('');
+    const example = result.examples?.[0] ? `<div class="lookup-example">例句：${escapeHtml(result.examples[0])}</div>` : '';
+    currentLookupDefinition = result.definitions?.[0] || '';
+    $('#lookupResult').innerHTML = definitions ? `<ul>${definitions}</ul>${example}` : 'Longman 没有返回精确词条，请点击右上角打开官网搜索。';
+  } catch (error) {
+    console.error(error);
+    if (currentLookupWord === word) {
+      $('#lookupMeta').textContent = 'Longman 暂时无法连接';
+      $('#lookupResult').textContent = '可以点击右上角打开朗文官网，并把你认可的中文意思填入下方。';
+    }
+  }
+}
+
+function saveLookupWord() {
+  if (!currentLookupWord) return;
+  let vocabulary = [];
+  try { vocabulary = JSON.parse(localStorage.getItem('echoetch-vocabulary') || '[]'); } catch {}
+  const item = {
+    word: currentLookupWord,
+    definition: currentLookupDefinition,
+    translation: $('#lookupTranslation').value.trim(),
+    sentence,
+    source: $('#sourceTitle').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  const existingIndex = vocabulary.findIndex(entry => entry.word.toLowerCase() === item.word.toLowerCase());
+  if (existingIndex >= 0) vocabulary[existingIndex] = { ...vocabulary[existingIndex], ...item };
+  else vocabulary.unshift(item);
+  localStorage.setItem('echoetch-vocabulary', JSON.stringify(vocabulary));
+  $('#lookupSaved').hidden = false;
+  $('#addLookupWord').textContent = '更新生词本';
+  showToast(`已将 ${currentLookupWord} 加入生词本`);
+}
+
+async function copyText(value, message) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    document.body.appendChild(helper);
+    helper.select();
+    document.execCommand('copy');
+    helper.remove();
+  }
+  showToast(message);
+}
+
 function selectSentence(index) {
   const segment = sentenceSegments[index];
   if (!segment) return;
@@ -343,15 +580,8 @@ function updateLessonContent(segment) {
   $('#hintText').hidden = true;
   $('#hintText').textContent = segment.text ? `提示：首词是 “${segment.text.split(/\s+/)[0]}”。` : '请先粘贴英文文本并重新自动拆句，才能使用听写对比。';
   if (segment.text && selectedSegmentIndex >= 0) {
-    $$('.knowledge-grid article').forEach((article, index) => {
-      const headings = ['句子结构', '发音与连读', '语境与表达'];
-      const copies = ['完成听写后标记句子主干和容易漏听的功能词。', '反复重听，留意弱读、连读、重音和停顿位置。', '结合 BBC 节目上下文记录这句话适合使用的场景。'];
-      $('h3', article).textContent = headings[index];
-      $('p', article).textContent = copies[index];
-    });
-    $('.sentence-parts').innerHTML = `<span>${escapeHtml(segment.text)}</span>`;
-    $$('.review-checklist label')[0].lastChild.textContent = ' 我能听清句中的弱读与连读';
-    $$('.review-checklist label')[1].lastChild.textContent = ' 我理解这句话的结构和含义';
+    loadSentenceTranslation(segment);
+    renderSentenceAnalysis(segment.text);
   }
 }
 
@@ -904,6 +1134,7 @@ if (savedSourceMeta) {
 }
 
 buildWaves();
+renderSentenceAnalysis(sentence);
 $$('.step-tab').forEach(tab => tab.addEventListener('click', () => goToStep(tab.dataset.step)));
 $$('.next-step').forEach(button => button.addEventListener('click', () => goToStep(button.dataset.next, true)));
 
@@ -935,6 +1166,35 @@ $$('[data-speak]').forEach(button => button.addEventListener('click', () => {
   const rate = currentStep === 3 ? Number($('#reviewSpeed').value) : 1;
   playLessonAudio(rate, button.classList.contains('play-main') ? button : null, sentence || button.dataset.speak);
 }));
+function lookupCurrentSelection(root) {
+  setTimeout(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+    const commonNode = selection.getRangeAt(0).commonAncestorContainer;
+    const commonElement = commonNode.nodeType === Node.TEXT_NODE ? commonNode.parentElement : commonNode;
+    if (commonElement && root.contains(commonElement)) lookupLongman(selection.toString());
+  }, 0);
+}
+[$('#originalSentence'), $('#sentenceAnalysisLine')].forEach(root => {
+  root.addEventListener('mouseup', () => lookupCurrentSelection(root));
+  root.addEventListener('touchend', () => lookupCurrentSelection(root));
+});
+$('#sentenceAnalysisLine').addEventListener('click', event => {
+  if (!window.getSelection()?.isCollapsed) return;
+  const token = event.target.closest('[data-word]');
+  if (token) lookupLongman(token.dataset.word);
+});
+$('#addLookupWord').addEventListener('click', saveLookupWord);
+$('#copyStructure').addEventListener('click', () => copyText(`${$('#structureHeading').textContent}\n${$('#structureCopy').textContent}`, '主干笔记已复制'));
+$('#slowListenSentence').addEventListener('click', function () {
+  playLessonAudio(.75, this);
+  this.textContent = '正在以 0.75× 重听';
+  setTimeout(() => { this.textContent = '0.75× 重听当前句'; }, 1800);
+});
+$('#copyUsage').addEventListener('click', () => {
+  const usage = usageForSentence(sentence);
+  copyText(`${usage.pattern}\n${usage.example}`, '可复用表达已复制');
+});
 $$('.save-chip').forEach(button => button.addEventListener('click', () => {
   button.classList.toggle('saved');
   button.textContent = button.classList.contains('saved') ? '✓ 已收藏' : '＋ 收藏到笔记';
