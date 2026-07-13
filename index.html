@@ -8,36 +8,54 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260713-10" />
+  <link rel="stylesheet" href="styles.css?v=20260713-11" />
 </head>
-<body>
+<body class="library-mode">
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#" aria-label="声刻首页">
+      <a class="brand" href="./" aria-label="返回声刻课程首页">
         <span class="brand-mark">E</span>
         <span>声刻 <small>EchoEtch</small></span>
       </a>
-      <div class="streak"><span>🔥</span><strong>12</strong><span>天</span></div>
-      <button class="avatar" aria-label="个人中心">TH</button>
+      <span class="topbar-mode">固定课程</span>
     </header>
 
     <main>
-      <section class="hero">
-        <div>
-          <p class="eyebrow">TODAY'S SESSION · 约 18 分钟</p>
-          <h1>听见英语的<br><em>真实节奏</em></h1>
-          <p class="hero-copy">不只是听懂。通过听写、拆解、跟读和背诵，把一句地道表达真正变成自己的。</p>
+      <section class="course-library" id="courseLibrary">
+        <div class="library-intro">
+          <p class="eyebrow">CURATED LISTENING · 固定精品课</p>
+          <h1>一句一句，<br><em>真正听懂</em></h1>
+          <p>每节课程都已提前完成音频切分和文本对齐。选择一句，完成听写、解析、重听、跟读和背诵。</p>
         </div>
-        <div class="daily-ring" aria-label="今日进度 40%">
-          <svg viewBox="0 0 120 120" role="img">
-            <circle class="ring-bg" cx="60" cy="60" r="51"></circle>
-            <circle class="ring-value" cx="60" cy="60" r="51"></circle>
-          </svg>
-          <div><strong id="ringPercent">40%</strong><span>今日进度</span></div>
+        <div class="library-heading"><h2>全部课程</h2><span>1 门课程</span></div>
+        <article class="catalog-course" data-course-id="van-jones-kind-of-ai">
+          <div class="catalog-cover">
+            <span>TED TALK</span>
+            <strong>01</strong>
+            <small>16 MIN · 173 SENTENCES</small>
+          </div>
+          <div class="catalog-copy">
+            <div class="catalog-meta"><span>中级 B1–B2</span><span>演讲</span><span>科技与社会</span></div>
+            <h2>The Kind of AI We Actually Need</h2>
+            <p>Van Jones · 用真实演讲训练长句理解、语流辨识和观点表达。</p>
+            <div class="catalog-progress">
+              <div><span id="catalogProgressText">尚未开始</span><strong id="catalogProgressPercent">0%</strong></div>
+              <span class="catalog-progress-track" role="progressbar" aria-label="课程完成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="catalogProgressValue"></i></span>
+            </div>
+            <a class="button primary catalog-action" id="catalogCourseAction" href="?lesson=user-media%2Fvan-jones-kind-of-ai%2Flesson.json">开始课程 <span>→</span></a>
+          </div>
+        </article>
+      </section>
+
+      <section class="lesson-toolbar lesson-only" aria-label="课程导航">
+        <a class="back-link" href="./">← 课程列表</a>
+        <div class="lesson-position">
+          <div><span id="lessonProgressLabel">第 1 / 173 句</span><strong id="stepProgressLabel">步骤 1 / 5</strong></div>
+          <span class="lesson-progress-track"><i id="lessonProgressBar"></i></span>
         </div>
       </section>
 
-      <section class="source-loader" id="sourceDropZone" aria-labelledby="sourceLoaderTitle">
+      <section class="source-loader" id="sourceDropZone" aria-labelledby="sourceLoaderTitle" hidden>
         <div class="drop-overlay" aria-hidden="true"><strong>松开以导入音频</strong><span>MP3 · M4A · MP4 · WAV · OGG · WebM</span></div>
         <div class="source-loader-head">
           <div>
@@ -82,10 +100,6 @@
             <button class="button ghost" id="autoSplit" disabled>自动拆分句子</button>
           </div>
         </div>
-        <div class="sentence-panel" id="sentencePanel" hidden>
-          <div class="sentence-panel-head"><div><strong>句子列表</strong><small id="sentenceSummary">请选择一句开始训练</small></div><span>点击句子可切换训练片段</span></div>
-          <div class="sentence-list" id="sentenceList"></div>
-        </div>
         <div class="source-status">
           <div><span class="source-dot"></span><strong id="audioFileName">当前使用示例语音</strong><small id="audioDuration">上传后可精确截取片段</small></div>
           <button class="button primary" id="applySource">使用当前句训练</button>
@@ -93,25 +107,30 @@
         <audio id="sourceAudio" preload="metadata"></audio>
       </section>
 
-      <section class="lesson-card">
+      <section class="lesson-card lesson-only">
         <div class="lesson-cover">
           <div class="cover-label" id="sourceBrand">BBC LEARNING ENGLISH</div>
           <div class="sound-wave" aria-hidden="true">
             <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
           </div>
-          <p>EP. 08</p>
+          <p id="lessonNumber">LESSON 01</p>
         </div>
         <div class="lesson-info">
-          <div class="lesson-meta"><span>中级 B1</span><span>·</span><span>日常对话</span></div>
+          <div class="lesson-meta"><span id="lessonMetaLine">固定课程 · 正在载入</span></div>
           <h2 id="lessonSentence">It's not as easy as it looks.</h2>
-          <p>场景：和朋友聊起学习一项新技能</p>
+          <p id="lessonContext">选择下方句子开始逐句训练</p>
           <div class="lesson-stats">
             <span><b id="lessonDuration">8.0</b> 秒</span><span><b>5</b> 个步骤</span><span><b id="lessonSentenceCount">1</b> 个句子</span>
           </div>
         </div>
       </section>
 
-      <nav class="stepper" aria-label="课程步骤">
+      <section class="sentence-panel course-sentence-panel lesson-only" id="sentencePanel" hidden>
+        <div class="sentence-panel-head"><div><strong>选择训练句子</strong><small id="sentenceSummary">课程载入后可选择任意一句</small></div><span>点击句子切换训练片段</span></div>
+        <div class="sentence-list" id="sentenceList"></div>
+      </section>
+
+      <nav class="stepper lesson-only" aria-label="课程步骤">
         <button class="step-tab active" data-step="1"><span>01</span><small>盲听听写</small></button>
         <button class="step-tab" data-step="2"><span>02</span><small>对比解析</small></button>
         <button class="step-tab" data-step="3"><span>03</span><small>复习重听</small></button>
@@ -119,7 +138,7 @@
         <button class="step-tab" data-step="5"><span>05</span><small>原速背诵</small></button>
       </nav>
 
-      <section class="workspace">
+      <section class="workspace lesson-only">
         <div class="workspace-head">
           <div>
             <p class="step-kicker" id="stepKicker">STEP 01 · INPUT</p>
@@ -237,10 +256,10 @@
       <div class="confetti">✦</div>
       <p class="eyebrow">SESSION COMPLETE</p>
       <h2>今天这句话，<br>已经是你的了。</h2>
-      <div class="final-stats"><div><strong>18</strong><span>分钟</span></div><div><strong>8</strong><span>知识点</span></div><div><strong>3</strong><span>次原速</span></div></div>
-      <button class="button primary" id="closeCompletion">收下今日进步</button>
+      <div class="final-stats"><div><strong id="completedSentenceCount">1</strong><span>已完成句子</span></div><div><strong id="courseCompletionPercent">1%</strong><span>课程进度</span></div></div>
+      <button class="button primary" id="closeCompletion">继续下一句</button>
     </div>
   </div>
-  <script src="app.js?v=20260713-10"></script>
+  <script src="app.js?v=20260713-11"></script>
 </body>
 </html>

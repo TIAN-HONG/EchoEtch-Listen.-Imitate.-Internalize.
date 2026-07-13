@@ -29,6 +29,15 @@ let optimizationCancelled = false;
 let currentLookupWord = '';
 let currentLookupDefinition = '';
 let translationRequestId = 0;
+let currentCourseId = '';
+let currentCourseTotal = 0;
+
+const COURSE_CATALOG = {
+  'van-jones-kind-of-ai': {
+    total: 173,
+    lessonPath: 'user-media/van-jones-kind-of-ai/lesson.json'
+  }
+};
 
 const MAX_MEDIA_BYTES = 800 * 1024 * 1024;
 const LARGE_MEDIA_BYTES = 200 * 1024 * 1024;
@@ -48,6 +57,47 @@ function isFunctionWord(word) {
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+
+function courseProgressKey(courseId) {
+  return `echoetch-course-progress-${courseId}`;
+}
+
+function readCourseProgress(courseId) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(courseProgressKey(courseId)) || '{}');
+    return {
+      lastIndex: Math.max(0, Number(stored.lastIndex) || 0),
+      completed: Array.isArray(stored.completed) ? stored.completed.map(Number).filter(Number.isInteger) : []
+    };
+  } catch {
+    return { lastIndex: 0, completed: [] };
+  }
+}
+
+function saveCourseProgress(courseId, progress) {
+  localStorage.setItem(courseProgressKey(courseId), JSON.stringify({ ...progress, updatedAt: new Date().toISOString() }));
+}
+
+function updateCatalogProgress() {
+  const courseId = 'van-jones-kind-of-ai';
+  const total = COURSE_CATALOG[courseId].total;
+  const progress = readCourseProgress(courseId);
+  const completedCount = new Set(progress.completed.filter(index => index >= 0 && index < total)).size;
+  const percent = Math.round(completedCount / total * 100);
+  $('#catalogProgressText').textContent = completedCount ? `${completedCount} / ${total} 句已完成` : '尚未开始';
+  $('#catalogProgressPercent').textContent = `${percent}%`;
+  $('#catalogProgressValue').style.width = `${percent}%`;
+  $('.catalog-progress-track').setAttribute('aria-valuenow', String(percent));
+  $('#catalogCourseAction').innerHTML = `${completedCount || progress.lastIndex ? '继续学习' : '开始课程'} <span>→</span>`;
+}
+
+function updateLessonPosition() {
+  if (!sentenceSegments.length || selectedSegmentIndex < 0) return;
+  const total = currentCourseTotal || sentenceSegments.length;
+  const position = Math.min(total, selectedSegmentIndex + 1);
+  $('#lessonProgressLabel').textContent = `第 ${position} / ${total} 句`;
+  $('#lessonProgressBar').style.width = `${position / total * 100}%`;
+}
 
 function buildWaves() {
   $$('.waveform').forEach((wave, group) => {
@@ -70,7 +120,7 @@ function showToast(message) {
   showToast.timeout = setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
-function goToStep(step, completePrevious = false) {
+function goToStep(step, completePrevious = false, scroll = true) {
   currentStep = Number(step);
   $$('.step-tab').forEach(tab => {
     const tabStep = Number(tab.dataset.step);
@@ -83,10 +133,8 @@ function goToStep(step, completePrevious = false) {
   $('#stepTitle').textContent = title;
   $('#stepDesc').textContent = desc;
   $('#statusChip').textContent = currentStep === 5 ? '最终挑战' : '进行中';
-  const percent = currentStep * 20;
-  $('#ringPercent').textContent = `${percent}%`;
-  $('.ring-value').style.strokeDashoffset = 320.4 * (1 - percent / 100);
-  $('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#stepProgressLabel').textContent = `步骤 ${currentStep} / 5`;
+  if (scroll) $('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function speak(text = sentence, rate = 1, onend) {
@@ -307,13 +355,15 @@ function formatPreciseTime(seconds) {
 function renderSentenceList() {
   const list = $('#sentenceList');
   list.innerHTML = '';
+  const completedIndexes = currentCourseId ? new Set(readCourseProgress(currentCourseId).completed) : new Set();
   sentenceSegments.forEach((segment, index) => {
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = `sentence-item${index === selectedSegmentIndex ? ' selected' : ''}`;
+    const isCompleted = completedIndexes.has(index);
+    item.className = `sentence-item${index === selectedSegmentIndex ? ' selected' : ''}${isCompleted ? ' completed' : ''}`;
     item.dataset.index = index;
     const displayText = segment.text || `第 ${index + 1} 句 · 原文待补充`;
-    item.innerHTML = `<span class="sentence-number">${String(index + 1).padStart(2, '0')}</span><span class="sentence-copy"><strong>${escapeHtml(displayText)}</strong><small>${formatPreciseTime(segment.start)}–${formatPreciseTime(segment.end)} · ${(segment.end - segment.start).toFixed(1)} 秒</small></span><span class="sentence-play" aria-hidden="true">▶</span>`;
+    item.innerHTML = `<span class="sentence-number">${String(index + 1).padStart(2, '0')}</span><span class="sentence-copy"><strong>${escapeHtml(displayText)}</strong><small>${formatPreciseTime(segment.start)}–${formatPreciseTime(segment.end)} · ${(segment.end - segment.start).toFixed(1)} 秒</small></span><span class="sentence-play" aria-hidden="true">${isCompleted ? '✓' : '▶'}</span>`;
     item.addEventListener('click', () => {
       selectSentence(index);
       playLessonAudio(1, null, sentence);
@@ -563,6 +613,12 @@ function selectSentence(index) {
   sentence = segment.text || '';
   updateLessonContent(segment);
   $$('.sentence-item').forEach((item, itemIndex) => item.classList.toggle('selected', itemIndex === index));
+  updateLessonPosition();
+  if (currentCourseId) {
+    const progress = readCourseProgress(currentCourseId);
+    progress.lastIndex = index;
+    saveCourseProgress(currentCourseId, progress);
+  }
 }
 
 function updateLessonContent(segment) {
@@ -913,9 +969,10 @@ async function loadAudioFile(file, options = {}) {
         end: Number(segment.end),
         text: String(segment.text || '').trim()
       })).filter(segment => segment.text && segment.end > segment.start);
-      selectedSegmentIndex = sentenceSegments.length ? 0 : -1;
+      const requestedIndex = Math.max(0, Math.min(sentenceSegments.length - 1, Number(options.startIndex) || 0));
+      selectedSegmentIndex = sentenceSegments.length ? requestedIndex : -1;
       renderSentenceList();
-      if (sentenceSegments.length) selectSentence(0);
+      if (sentenceSegments.length) selectSentence(requestedIndex);
       $('#splitStatus').textContent = `已载入预处理时间轴，共 ${sentenceSegments.length} 个训练句`;
       showToast(`TED 课程已拆解为 ${sentenceSegments.length} 句`);
     } else {
@@ -934,7 +991,13 @@ async function loadAudioFile(file, options = {}) {
 
 async function loadPreparedLessonFromQuery() {
   const lessonPath = new URLSearchParams(window.location.search).get('lesson');
-  if (!lessonPath) return;
+  if (!lessonPath) {
+    updateCatalogProgress();
+    return;
+  }
+  document.body.classList.remove('library-mode');
+  document.body.classList.add('lesson-mode');
+  currentCourseId = Object.entries(COURSE_CATALOG).find(([, course]) => course.lessonPath === lessonPath.replace(/^\.\//, ''))?.[0] || 'prepared-course';
   try {
     const manifestUrl = new URL(lessonPath, window.location.href);
     if (manifestUrl.origin !== window.location.origin) throw new Error('Prepared lesson must be local');
@@ -950,16 +1013,20 @@ async function loadPreparedLessonFromQuery() {
     const audioName = decodeURIComponent(audioUrl.pathname.split('/').pop()) || 'learning-audio.m4a';
     const audioFile = new File([audioBlob], audioName, { type: audioBlob.type || 'audio/mp4' });
     const title = manifest.source?.title || 'Prepared TED lesson';
+    const speaker = manifest.source?.speaker || 'TED';
     const officialUrl = manifest.source?.official_url || '';
+    currentCourseTotal = manifest.segments.length;
     $('#sourceType').value = manifest.source?.type || 'ted';
     updateSourceProfile($('#sourceType').value, false);
     $('#sourceTitle').value = title;
     $('#sourceUrl').value = officialUrl;
-    if (officialUrl) inspectSourceUrl();
     $('#transcriptInput').value = manifest.segments.map(segment => segment.text).join(' ');
     hideMediaOptimizer();
-    $('.lesson-meta span:first-child').textContent = `${title} · ${manifest.source?.speaker || 'TED'}`;
-    await loadAudioFile(audioFile, { segments: manifest.segments });
+    $('#lessonMetaLine').textContent = `${title} · ${speaker}`;
+    $('#lessonContext').textContent = `${speaker} · 固定课程 · 逐句训练`;
+    document.title = `${title} · 声刻 EchoEtch`;
+    const progress = readCourseProgress(currentCourseId);
+    await loadAudioFile(audioFile, { segments: manifest.segments, startIndex: progress.lastIndex });
   } catch (error) {
     console.error(error);
     showToast('预处理 TED 课程载入失败');
@@ -1254,14 +1321,58 @@ $('#reciteButton').addEventListener('click', async function () {
   }
 });
 
+function resetSentenceSession() {
+  stopSourceAudio();
+  listenCount = 0;
+  successCount = 0;
+  $('#listenCount').textContent = '0 / 3';
+  $$('#listenDots i').forEach(dot => dot.classList.remove('on'));
+  $$('.step-tab').forEach(tab => tab.classList.remove('completed'));
+  $('#dictationScore').textContent = '—';
+  $('#yourAnswer').textContent = '尚未提交';
+  $('#scoreTitle').textContent = '提交听写后查看结果';
+  $('#scoreCopy').textContent = '系统会标出遗漏和听错的部分。';
+  $('#successCount').textContent = '0 / 3 次';
+  $('#reciteTimer').textContent = '00:00.0';
+  $('#recallText').classList.add('blurred');
+  $('.review-sentence').classList.remove('hidden-text');
+  $('#hideSentence').textContent = '隐藏文本挑战';
+  $('#wordLookup').hidden = true;
+  goToStep(1, false, false);
+}
+
 $('#finishLesson').addEventListener('click', () => {
   $$('.step-tab').forEach(tab => tab.classList.add('completed'));
-  $('#ringPercent').textContent = '100%';
-  $('.ring-value').style.strokeDashoffset = 0;
+  let completedCount = 1;
+  let completionPercent = 100;
+  if (currentCourseId && selectedSegmentIndex >= 0) {
+    const progress = readCourseProgress(currentCourseId);
+    progress.completed = [...new Set([...progress.completed, selectedSegmentIndex])].sort((a, b) => a - b);
+    progress.lastIndex = selectedSegmentIndex;
+    saveCourseProgress(currentCourseId, progress);
+    completedCount = progress.completed.length;
+    completionPercent = Math.round(completedCount / (currentCourseTotal || sentenceSegments.length || 1) * 100);
+    renderSentenceList();
+    updateCatalogProgress();
+  }
+  $('#completedSentenceCount').textContent = completedCount;
+  $('#courseCompletionPercent').textContent = `${completionPercent}%`;
+  $('#closeCompletion').textContent = selectedSegmentIndex < sentenceSegments.length - 1 ? '继续下一句' : '返回课程列表';
   $('#completion').hidden = false;
   localStorage.setItem('echo-session-complete', new Date().toISOString());
 });
-$('#closeCompletion').addEventListener('click', () => $('#completion').hidden = true);
+$('#closeCompletion').addEventListener('click', () => {
+  $('#completion').hidden = true;
+  if (selectedSegmentIndex >= sentenceSegments.length - 1) {
+    window.location.href = './';
+    return;
+  }
+  resetSentenceSession();
+  selectSentence(selectedSegmentIndex + 1);
+  renderSentenceList();
+  $('.sentence-item.selected')?.scrollIntoView({ block: 'nearest' });
+  $('.workspace').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
 $('#completion').addEventListener('click', e => { if (e.target === $('#completion')) $('#completion').hidden = true; });
 
 window.speechSynthesis?.getVoices?.();

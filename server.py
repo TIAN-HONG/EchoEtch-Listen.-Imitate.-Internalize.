@@ -143,6 +143,6 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), NoCacheHandler)
-    print("EchoEtch is running at http://127.0.0.1:8765", flush=True)
+    server = ThreadingHTTPServer(("127.0.0.1", 8767), NoCacheHandler)
+    print("EchoEtch is running at http://127.0.0.1:8767", flush=True)
     server.serve_forever()

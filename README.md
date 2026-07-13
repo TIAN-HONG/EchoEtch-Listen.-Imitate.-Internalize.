@@ -2,7 +2,7 @@
 
 **Listen it. Etch it. Speak it.**
 
-EchoEtch is a five-step intensive listening and shadowing prototype designed to turn authentic English audio into speaking ability.
+EchoEtch is a mobile-first H5 prototype for learning from curated English listening courses. Each fixed course is prepared once, then reused without per-learner AI processing.
 
 ## Learning flow
 
@@ -12,26 +12,18 @@ EchoEtch is a five-step intensive listening and shadowing prototype designed to 
 4. Shadow the original rhythm and emotion
 5. Recite at full speed
 
-## BBC and TED learning material workflow
+## Fixed-course workflow
 
-The prototype supports legally obtained BBC Learning English, TED, TED-Ed, and other authentic audio. It detects natural pauses locally, aligns pasted English transcript sentences, and turns each generated segment into a five-step practice unit.
+The default page is a course library. Opening a course loads its prepared audio, transcript, and sentence timestamps, then turns every sentence into a five-step practice unit.
 
-- Audio stays in the browser and is not uploaded to a server.
-- Audio and MP4 files can be selected or dragged directly onto the source importer.
-- MP4 video and audio files over 100 MB can be converted locally to a mono 64 kbps AAC learning track with progress and cancellation controls.
-- Audio files are intentionally excluded from this Git repository.
-- Programme title, official source URL, transcript, and segment timestamps can be saved locally.
-- Pasted BBC/TED page links are recognized, attributed, and can be opened from the interface.
-- A normal BBC/TED webpage is not an audio file and is not scraped for embedded media.
-- Direct audio URLs can be imported only when the source server permits browser CORS access.
-- Audio is automatically split after selection using local pause detection.
-- Pasted transcripts are split by punctuation and aligned to nearby pauses.
-- Learners can select any generated sentence and fine-tune its start/end time.
+- The current catalog contains the prepared Van Jones TED lesson with 173 timestamped sentences.
+- Learners can select any sentence and continue from their last position.
+- Completed sentences and course progress are stored in browser `localStorage`.
+- Finishing the five-step flow marks the sentence complete and advances to the next sentence.
 - Step 2 automatically marks a likely subject, predicate, object/complement, and easy-to-miss function words.
 - The current sentence gets a Chinese machine-translation aid; results are cached locally and should be checked against the sentence structure.
 - Selecting a word or phrase opens a Longman lookup panel; learners can review the English definition, write their own Chinese understanding, and choose whether to save it to the local vocabulary book.
-- Imported files are limited to 800 MB, with a performance warning above 200 MB. MP4 is supported when it contains a browser-decodable audio track; AAC audio is recommended. MP3 and WAV remain the most compatible formats.
-- The repository does not redistribute BBC or TED audio, videos, or complete transcripts.
+- Prepared media remains outside Git. Public deployment must use licensed, self-produced, or redistribution-permitted material.
 
 ## Run locally
 
@@ -41,7 +33,13 @@ Open `index.html` in a modern browser. For the most reliable microphone support,
 python server.py
 ```
 
-Then open `http://127.0.0.1:8765`. The local server disables browser caching so interface and JavaScript changes take effect after a normal refresh.
+Then open `http://127.0.0.1:8767` for the course library. The local server disables browser caching so interface and JavaScript changes take effect after a normal refresh.
+
+The prepared local TED course opens at:
+
+```text
+http://127.0.0.1:8767/?lesson=user-media%2Fvan-jones-kind-of-ai%2Flesson.json
+```
 
 ## Tech
 
@@ -51,5 +49,5 @@ Then open `http://127.0.0.1:8765`. The local server disables browser caching so 
 - Web Speech API
 - MediaRecorder API
 - Local browser audio playback
-- Web Audio API pause detection and transcript alignment
+- Prepared lesson manifests with sentence timestamps
 - Optional local Longman lookup proxy in `server.py`
