@@ -1,0 +1,240 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f4f0e8" />
+  <title>声刻 EchoEtch · 真实语料精听训练</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260713-2" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="声刻首页">
+        <span class="brand-mark">E</span>
+        <span>声刻 <small>EchoEtch</small></span>
+      </a>
+      <div class="streak"><span>🔥</span><strong>12</strong><span>天</span></div>
+      <button class="avatar" aria-label="个人中心">TH</button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">TODAY'S SESSION · 约 18 分钟</p>
+          <h1>听见英语的<br><em>真实节奏</em></h1>
+          <p class="hero-copy">不只是听懂。通过听写、拆解、跟读和背诵，把一句地道表达真正变成自己的。</p>
+        </div>
+        <div class="daily-ring" aria-label="今日进度 40%">
+          <svg viewBox="0 0 120 120" role="img">
+            <circle class="ring-bg" cx="60" cy="60" r="51"></circle>
+            <circle class="ring-value" cx="60" cy="60" r="51"></circle>
+          </svg>
+          <div><strong id="ringPercent">40%</strong><span>今日进度</span></div>
+        </div>
+      </section>
+
+      <section class="source-loader" id="sourceDropZone" aria-labelledby="sourceLoaderTitle">
+        <div class="drop-overlay" aria-hidden="true"><strong>松开以导入音频</strong><span>MP3 · M4A · MP4 · WAV · OGG · WebM</span></div>
+        <div class="source-loader-head">
+          <div>
+            <p class="eyebrow">YOUR AUDIO · 仅保存在当前浏览器</p>
+            <h2 id="sourceLoaderTitle">导入你的 BBC / TED 学习语料</h2>
+            <p>上传你已合法获取的音频，粘贴对应英文文本后自动识别停顿并拆成句子。音频不会上传到服务器，也不会写入 GitHub。</p>
+          </div>
+          <label class="upload-button" for="audioUpload">＋ 选择或拖入音频</label>
+          <input id="audioUpload" type="file" accept="audio/mpeg,audio/mp4,video/mp4,audio/wav,audio/ogg,audio/webm,.mp3,.m4a,.mp4,.wav,.ogg,.webm" hidden>
+        </div>
+        <div class="source-fields">
+          <label>语料来源<select id="sourceType"><option value="bbc">BBC Learning English</option><option value="ted">TED / TED-Ed</option><option value="other">其他语料</option></select></label>
+          <label>节目名称<input id="sourceTitle" type="text" value="BBC Learning English · 6 Minute English"></label>
+          <div class="source-field source-url-field">
+            <label for="sourceUrl">官方来源链接 <span>可识别与记录</span></label>
+            <div class="url-control"><input id="sourceUrl" type="url" placeholder="https://www.bbc.co.uk/learningenglish/..."><button type="button" id="sourceLinkAction" disabled>识别链接</button></div>
+            <small id="sourceUrlStatus">粘贴 BBC 或 TED 页面链接，或可直接访问的音频直链</small>
+          </div>
+          <label>片段开始（秒）<input id="segmentStart" type="number" min="0" value="0" step="0.1"></label>
+          <label>片段结束（秒）<input id="segmentEnd" type="number" min="0.5" value="8" step="0.1"></label>
+        </div>
+        <div class="media-optimize" id="mediaOptimize" hidden>
+          <div class="media-optimize-copy">
+            <strong id="optimizeTitle">提取轻量音轨</strong>
+            <small id="optimizeSummary">保留人声并移除视频画面，原文件不会被修改</small>
+          </div>
+          <div class="optimize-progress" id="optimizeProgress" hidden>
+            <span><i id="optimizeProgressBar"></i></span>
+            <small id="optimizeProgressText">准备处理…</small>
+          </div>
+          <div class="media-optimize-actions">
+            <button class="button ghost" id="useOriginalMedia" type="button">直接使用原文件</button>
+            <button class="button primary" id="optimizeMedia" type="button">提取轻量音轨</button>
+            <button class="button ghost" id="cancelOptimize" type="button" hidden>取消</button>
+          </div>
+        </div>
+        <div class="transcript-tools">
+          <label for="transcriptInput">对应英文文本（推荐粘贴，系统会按标点和音频停顿对齐）</label>
+          <textarea id="transcriptInput" placeholder="Paste the transcript here. The app will split it into sentences and align each sentence with the audio..."></textarea>
+          <div class="split-actions">
+            <div><strong>智能拆句</strong><small id="splitStatus">选择音频后即可开始；不粘贴文本时仅按停顿拆分</small></div>
+            <button class="button ghost" id="autoSplit" disabled>自动拆分句子</button>
+          </div>
+        </div>
+        <div class="sentence-panel" id="sentencePanel" hidden>
+          <div class="sentence-panel-head"><div><strong>句子列表</strong><small id="sentenceSummary">请选择一句开始训练</small></div><span>点击句子可切换训练片段</span></div>
+          <div class="sentence-list" id="sentenceList"></div>
+        </div>
+        <div class="source-status">
+          <div><span class="source-dot"></span><strong id="audioFileName">当前使用示例语音</strong><small id="audioDuration">上传后可精确截取片段</small></div>
+          <button class="button primary" id="applySource">使用当前句训练</button>
+        </div>
+        <audio id="sourceAudio" preload="metadata"></audio>
+      </section>
+
+      <section class="lesson-card">
+        <div class="lesson-cover">
+          <div class="cover-label" id="sourceBrand">BBC LEARNING ENGLISH</div>
+          <div class="sound-wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <p>EP. 08</p>
+        </div>
+        <div class="lesson-info">
+          <div class="lesson-meta"><span>中级 B1</span><span>·</span><span>日常对话</span></div>
+          <h2 id="lessonSentence">It's not as easy as it looks.</h2>
+          <p>场景：和朋友聊起学习一项新技能</p>
+          <div class="lesson-stats">
+            <span><b id="lessonDuration">8.0</b> 秒</span><span><b>5</b> 个步骤</span><span><b id="lessonSentenceCount">1</b> 个句子</span>
+          </div>
+        </div>
+      </section>
+
+      <nav class="stepper" aria-label="课程步骤">
+        <button class="step-tab active" data-step="1"><span>01</span><small>盲听听写</small></button>
+        <button class="step-tab" data-step="2"><span>02</span><small>对比解析</small></button>
+        <button class="step-tab" data-step="3"><span>03</span><small>复习重听</small></button>
+        <button class="step-tab" data-step="4"><span>04</span><small>影子跟读</small></button>
+        <button class="step-tab" data-step="5"><span>05</span><small>原速背诵</small></button>
+      </nav>
+
+      <section class="workspace">
+        <div class="workspace-head">
+          <div>
+            <p class="step-kicker" id="stepKicker">STEP 01 · INPUT</p>
+            <h2 id="stepTitle">先别看答案，只用耳朵</h2>
+            <p id="stepDesc">完整听 2–3 遍，把你听见的内容写下来。不确定的地方也先留下猜测。</p>
+          </div>
+          <span class="status-chip" id="statusChip">进行中</span>
+        </div>
+
+        <div class="step-panel active" data-panel="1">
+          <div class="audio-player">
+            <button class="play-main" id="playBlind" aria-label="播放听力"><span class="play-icon">▶</span></button>
+            <div class="audio-body">
+              <div class="waveform" id="waveform" aria-hidden="true"></div>
+              <div class="audio-meta"><span id="audioTime">00:00</span><span>00:08</span></div>
+            </div>
+            <button class="speed-button" id="blindSpeed">1.0×</button>
+          </div>
+          <div class="listen-count"><span>建议听 3 遍</span><div id="listenDots"><i></i><i></i><i></i></div><strong id="listenCount">0 / 3</strong></div>
+          <label class="input-label" for="dictation">写下你听到的内容</label>
+          <textarea id="dictation" placeholder="It’s not as..." spellcheck="false"></textarea>
+          <div class="panel-actions">
+            <button class="button ghost" id="hintButton">给我一个提示</button>
+            <button class="button primary" id="checkButton">完成听写 <span>→</span></button>
+          </div>
+          <p class="hint-text" id="hintText" hidden>提示：这句话包含比较结构 “not as ... as ...”。</p>
+        </div>
+
+        <div class="step-panel" data-panel="2">
+          <div class="score-row">
+            <div class="score-circle"><strong id="dictationScore">—</strong><span>匹配度</span></div>
+            <div><h3 id="scoreTitle">提交听写后查看结果</h3><p id="scoreCopy">系统会标出遗漏和听错的部分。</p></div>
+          </div>
+          <div class="compare-box">
+            <div><span>你的答案</span><p id="yourAnswer">尚未提交</p></div>
+            <div class="original"><span>原句</span><p id="originalSentence">It’s not as easy as it looks.</p><button class="mini-sound" data-speak="It's not as easy as it looks.">🔊 再听一次</button></div>
+          </div>
+          <div class="knowledge-grid">
+            <article><span class="tag">句型</span><h3>not as + adj. + as</h3><p>表示“没有……那么……”。第一处 as 后接形容词原级。</p><button class="save-chip">＋ 收藏句型</button></article>
+            <article><span class="tag warm">连读</span><h3>as‿it /æzɪt/</h3><p>as 的尾音 /z/ 与 it 的元音自然连在一起，听起来像一个词。</p><button class="save-chip">＋ 加入生词本</button></article>
+            <article><span class="tag green">语用</span><h3>as it looks</h3><p>“像看起来那样”。常用于提醒一件事比表面上更难或更复杂。</p><button class="save-chip">＋ 收藏表达</button></article>
+          </div>
+          <div class="panel-actions"><span></span><button class="button primary next-step" data-next="3">完成解析 <span>→</span></button></div>
+        </div>
+
+        <div class="step-panel" data-panel="3">
+          <div class="review-sentence">
+            <p id="reviewSentenceText">It’s not as easy as it looks.</p>
+            <div class="sentence-parts"><span>It’s not</span><span>as easy as</span><span>it looks</span></div>
+          </div>
+          <div class="audio-player review-player">
+            <button class="play-main" data-speak="It's not as easy as it looks." aria-label="播放原句"><span>▶</span></button>
+            <div class="audio-body"><div class="waveform compact" aria-hidden="true"></div><div class="audio-meta"><span>重听整句</span><span>00:08</span></div></div>
+            <select id="reviewSpeed" aria-label="播放速度"><option value="0.75">0.75×</option><option value="1" selected>1.0×</option><option value="1.15">1.15×</option></select>
+          </div>
+          <div class="review-checklist">
+            <label><input type="checkbox"> 我能听清 as‿it 的连读</label>
+            <label><input type="checkbox"> 我理解 not as...as 的结构</label>
+            <label><input type="checkbox"> 我能不看文本听懂整句</label>
+          </div>
+          <div class="panel-actions"><button class="button ghost" id="hideSentence">隐藏文本挑战</button><button class="button primary next-step" data-next="4">开始跟读 <span>→</span></button></div>
+        </div>
+
+        <div class="step-panel" data-panel="4">
+          <div class="shadowing-guide">
+            <span>影子跟读</span>
+            <p>音频开始后，延迟约半个词立刻跟上。不要停下来纠错，重点模仿节奏、重音和情绪。</p>
+          </div>
+          <div class="shadow-stage">
+            <div class="shadow-line"><small>原声</small><div class="waveform source-wave" aria-hidden="true"></div><button class="round-control" id="shadowPlay">▶</button></div>
+            <div class="shadow-line"><small>我的声音</small><div class="record-track" id="recordTrack"><span>点击录音，跟着原声一起说</span></div><button class="round-control record" id="recordButton">●</button></div>
+          </div>
+          <div class="mimic-focus">
+            <p>本轮模仿重点</p>
+            <div><button class="focus-chip selected">节奏</button><button class="focus-chip">重音</button><button class="focus-chip">语调</button><button class="focus-chip">情绪</button></div>
+          </div>
+          <div class="speed-practice">
+            <label for="shadowSpeed">跟读速度 <strong id="shadowSpeedLabel">0.8×</strong></label>
+            <input id="shadowSpeed" type="range" min="0.6" max="1" value="0.8" step="0.1">
+            <div><span>慢速适应</span><span>原速挑战</span></div>
+          </div>
+          <div class="panel-actions"><button class="button ghost" id="retryRecord">重新录制</button><button class="button primary next-step" data-next="5">完成跟读 <span>→</span></button></div>
+        </div>
+
+        <div class="step-panel" data-panel="5">
+          <div class="recall-card">
+            <p class="recall-label">MEMORY CHALLENGE</p>
+            <div id="recallText" class="recall-text blurred">It’s not as easy as it looks.</div>
+            <button class="peek-button" id="peekButton">按住偷看原句</button>
+          </div>
+          <div class="challenge-row">
+            <div><span>目标速度</span><strong>原速 1.0×</strong></div>
+            <div><span>目标时长</span><strong id="targetDuration">≤ 8.0 秒</strong></div>
+            <div><span>连续完成</span><strong id="successCount">0 / 3 次</strong></div>
+          </div>
+          <button class="big-record" id="reciteButton"><span>●</span><strong>开始背诵</strong><small>点击录音，再次点击结束</small></button>
+          <div class="timer" id="reciteTimer">00:00.0</div>
+          <div class="panel-actions"><button class="button ghost" data-speak="It's not as easy as it looks.">听一遍原速</button><button class="button primary" id="finishLesson">完成今日训练 ✓</button></div>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>声刻 EchoEtch</span><span>一次只练透一句。</span></footer>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <div class="completion" id="completion" hidden>
+    <div class="completion-card">
+      <div class="confetti">✦</div>
+      <p class="eyebrow">SESSION COMPLETE</p>
+      <h2>今天这句话，<br>已经是你的了。</h2>
+      <div class="final-stats"><div><strong>18</strong><span>分钟</span></div><div><strong>8</strong><span>知识点</span></div><div><strong>3</strong><span>次原速</span></div></div>
+      <button class="button primary" id="closeCompletion">收下今日进步</button>
+    </div>
+  </div>
+  <script src="app.js?v=20260713-3"></script>
+</body>
+</html>
